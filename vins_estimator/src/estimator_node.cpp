@@ -77,6 +77,8 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     gyr_0 = angular_velocity;
 }
 
+
+//得到窗口最后一个图像帧的imu项[P,Q,V,ba,bg,a,g]，对imu_buf中剩余imu_msg进行PVQ递推
 void update()
 {
     TicToc t_predict;
@@ -95,6 +97,8 @@ void update()
 
 }
 
+
+//对imu和图像数据在时间上进行对齐并组合
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
 getMeasurements()
 {
@@ -102,18 +106,24 @@ getMeasurements()
 
     while (true)
     {
+        //imu信息接收到后会在imu_callback回调中存入imu_buf，feature消息收到后会在feature_callback中存入feature_buf中
         if (imu_buf.empty() || feature_buf.empty())
             return measurements;
-
+        //下面两个if判断都是对imu数据和image数据在时间戳上的判断（时间要对齐才能进行组合）
+        
+        //imu_buf中最后一个imu消息的时间戳比feature_buf中第一个feature消息的时间戳还要小，说明imu数据发出来太早了
         if (!(imu_buf.back()->header.stamp.toSec() > feature_buf.front()->header.stamp.toSec() + estimator.td))
         {
             //ROS_WARN("wait for imu, only should happen at the beginning");
+            //imu数据比图像数据要早，所以返回，等待时间上和图像对齐的imu数据到来
             sum_of_wait++;
             return measurements;
         }
 
+        //imu_buf中第一个数据的时间戳比feature_buf的第一个数据的时间戳还要大
         if (!(imu_buf.front()->header.stamp.toSec() < feature_buf.front()->header.stamp.toSec() + estimator.td))
         {
+             //imu数据比图像数据滞后，所以图像数据要出队列
             ROS_WARN("throw img, only should happen at the beginning");
             feature_buf.pop();
             continue;
@@ -206,30 +216,46 @@ void relocalization_callback(const sensor_msgs::PointCloudConstPtr &points_msg)
 }
 
 // thread: visual-inertial odometry
+// 等待并获取measurements：(IMUs, img_msg)s，计算dt
+// estimator.processIMU() 进行IMU预积分
+// estimator.setReloFrame() 设置重定位帧
+// estimator.processImage() 处理图像帧：初始化，紧耦合的非线性优化
+
 void process()
 {
     while (true)
     {
         std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
         std::unique_lock<std::mutex> lk(m_buf);
+        /**
+         * 这里执行条件变量con.wait函数并且measurements.size==0，就锁定了当前线程，当前线程会一直被阻塞
+         * 直到有另一个线程也使用con变量调用notification函数来唤醒当前线程
+         * 当其他线程调用了notification后，这里的wait函数中还需要判断(measurements = getMeasurements()).size() != 0是否为true,
+         * 只有当为true的时候才会解除当前线程的阻塞
+         * */
         con.wait(lk, [&]
                  {
+            //1.获取在时间上“对齐”的IMU和图像数据的组合
             return (measurements = getMeasurements()).size() != 0;
                  });
         lk.unlock();
         m_estimator.lock();
+        //2.遍历measurements，其实就是遍历获取每一个img_msg和其对应的imu_msg对数据进行处理
         for (auto &measurement : measurements)
         {
             auto img_msg = measurement.second;
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
+             //遍历和当前img_msg时间上“对齐”的IMU数据
             for (auto &imu_msg : measurement.first)
             {
                 double t = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
-                if (t <= img_t)
+                if (t <= img_t)//imu数据比图像数据早到
                 { 
+                    //第一次的时候current_time值为-1
                     if (current_time < 0)
                         current_time = t;
+                    //计算时间间隔
                     double dt = t - current_time;
                     ROS_ASSERT(dt >= 0);
                     current_time = t;
@@ -243,9 +269,10 @@ void process()
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
                 }
-                else
+                else//图像数据比IMU数据早到
                 {
                     double dt_1 = img_t - current_time;
+                    //t为imu的时间，dt_2表示imu消息的时间戳和图像数据时间戳之间的差值
                     double dt_2 = t - img_t;
                     current_time = img_t;
                     ROS_ASSERT(dt_1 >= 0);
@@ -274,6 +301,7 @@ void process()
             {
                 vector<Vector3d> match_points;
                 double frame_stamp = relo_msg->header.stamp.toSec();
+                //遍历relo_msg中的points特征点
                 for (unsigned int i = 0; i < relo_msg->points.size(); i++)
                 {
                     Vector3d u_v_id;
@@ -287,6 +315,7 @@ void process()
                 Matrix3d relo_r = relo_q.toRotationMatrix();
                 int frame_index;
                 frame_index = relo_msg->channels[0].values[7];
+                //设置重定位帧
                 estimator.setReloFrame(frame_stamp, frame_index, match_points, relo_t, relo_r);
             }
 
@@ -294,35 +323,47 @@ void process()
 
             TicToc t_s;
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
+            //遍历img_msg中的特征点
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
                 int v = img_msg->channels[0].values[i] + 0.5;
                 int feature_id = v / NUM_OF_CAM;
                 int camera_id = v % NUM_OF_CAM;
+                 //获取img_msg中第i个点的x,y,z坐标，这个是归一化后的坐标值
                 double x = img_msg->points[i].x;
                 double y = img_msg->points[i].y;
                 double z = img_msg->points[i].z;
+                //获取像素的坐标值
                 double p_u = img_msg->channels[1].values[i];
                 double p_v = img_msg->channels[2].values[i];
+                //获取像素点在x,y方向上的速度
                 double velocity_x = img_msg->channels[3].values[i];
                 double velocity_y = img_msg->channels[4].values[i];
                 ROS_ASSERT(z == 1);
                 Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
                 xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
+                //建立每个特征点的image map,索引为feature_id
+                //image中每个特征点在帧中的位置信息和坐标轴上的速度信息按照feature_id为索引存入image中
                 image[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
             }
+            //图像特征处理，包括初始化和非线性优化
             estimator.processImage(image, img_msg->header);
 
             double whole_t = t_s.toc();
             printStatistics(estimator, whole_t);
             std_msgs::Header header = img_msg->header;
             header.frame_id = "world";
-
+            //给Rviz发送里程计信息：odometry、path、relo_path这几个topic
             pubOdometry(estimator, header);
+            //给Rviz发送关键点位置
             pubKeyPoses(estimator, header);
+            //给Rviz发送相机位置
             pubCameraPose(estimator, header);
+            //给Rviz发送点云数据
             pubPointCloud(estimator, header);
+            //发布tf转换topic
             pubTF(estimator, header);
+            //发送关键帧信息
             pubKeyframe(estimator);
             if (relo_msg != NULL)
                 pubRelocalization(estimator);
@@ -331,6 +372,7 @@ void process()
         m_estimator.unlock();
         m_buf.lock();
         m_state.lock();
+         //3.NON_LINEAR情况下，调用update进行参数更新
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             update();
         m_state.unlock();

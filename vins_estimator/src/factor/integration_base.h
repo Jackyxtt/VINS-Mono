@@ -10,6 +10,7 @@ class IntegrationBase
 {
   public:
     IntegrationBase() = delete;
+    // 预积分类：加速度计、陀螺仪、线性加速度计ba、陀螺仪bg、雅克比矩阵初始化、协方差矩阵15*15、dt、PVQ
     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},

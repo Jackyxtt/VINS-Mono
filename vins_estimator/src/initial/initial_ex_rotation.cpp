@@ -7,13 +7,14 @@ InitialEXRotation::InitialEXRotation(){
     Rimu.push_back(Matrix3d::Identity());
     ric = Matrix3d::Identity();
 }
-
+// 输入参数为：vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, 匹配的特征点 和 IMU预积分得的旋转矩阵Q
+// 输出参数：Matrix3d &calib_ric_result 标定的外参数
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
     frame_count++;
-    Rc.push_back(solveRelativeR(corres));
-    Rimu.push_back(delta_q_imu.toRotationMatrix());
-    Rc_g.push_back(ric.inverse() * delta_q_imu * ric);
+    Rc.push_back(solveRelativeR(corres));//相机帧之间匹配点得到本质矩阵，分解得到旋转矩阵R_ck+1^ck
+    Rimu.push_back(delta_q_imu.toRotationMatrix());//IMU之间预积分得到旋转矩阵R_bk+1^bk
+    Rc_g.push_back(ric.inverse() * delta_q_imu * ric);//每次迭代之前先用上一次估计的ric将R_bk+1^bk转换为R_ck+1^ck，为了下面求解核函数。
 
     Eigen::MatrixXd A(frame_count * 4, 4);
     A.setZero();
@@ -66,29 +67,34 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         return false;
 }
 
+//根据两帧归一化特征点求解两帧的旋转矩阵
 Matrix3d InitialEXRotation::solveRelativeR(const vector<pair<Vector3d, Vector3d>> &corres)
 {
-    if (corres.size() >= 9)
+    if (corres.size() >= 9)// 需要特征点大于9对，否则返回单位矩阵
     {
+         // 归一化相机系下前二维坐标SVD分解
         vector<cv::Point2f> ll, rr;
         for (int i = 0; i < int(corres.size()); i++)
         {
             ll.push_back(cv::Point2f(corres[i].first(0), corres[i].first(1)));
             rr.push_back(cv::Point2f(corres[i].second(0), corres[i].second(1)));
         }
+         // 求解两帧的本质矩阵E
         cv::Mat E = cv::findFundamentalMat(ll, rr);
         cv::Mat_<double> R1, R2, t1, t2;
+         // 本质矩阵svd分解得到4组Rt解
         decomposeE(E, R1, R2, t1, t2);
-
+        // 如果行列式为负，SVD分解-E
         if (determinant(R1) + 1.0 < 1e-09)
         {
             E = -E;
             decomposeE(E, R1, R2, t1, t2);
         }
+        // 通过三角化得到的正深度选择Rt解
         double ratio1 = max(testTriangulation(ll, rr, R1, t1), testTriangulation(ll, rr, R1, t2));
         double ratio2 = max(testTriangulation(ll, rr, R2, t1), testTriangulation(ll, rr, R2, t2));
         cv::Mat_<double> ans_R_cv = ratio1 > ratio2 ? R1 : R2;
-
+        // 对R求转置
         Matrix3d ans_R_eigen;
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)

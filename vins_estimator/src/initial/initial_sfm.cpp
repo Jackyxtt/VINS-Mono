@@ -18,7 +18,10 @@ void GlobalSFM::triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matr
 	point_3d(2) = triangulated_point(2) / triangulated_point(3);
 }
 
-
+/* @brief PNP方法得到第l帧到第i帧的位姿
+ * @param[in]  i  第i帧
+ * @param[update]  R_initial、P_initial、sfm_f
+ */
 bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
 								vector<SFMFeature> &sfm_f)
 {
@@ -26,16 +29,18 @@ bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
 	vector<cv::Point3f> pts_3_vector;
 	for (int j = 0; j < feature_num; j++)
 	{
-		if (sfm_f[j].state != true)
+		if (sfm_f[j].state != true)// 检查状态，该点是否被三角化，被三角化了才能用
 			continue;
 		Vector2d point2d;
 		for (int k = 0; k < (int)sfm_f[j].observation.size(); k++)
 		{
-			if (sfm_f[j].observation[k].first == i)
+			if (sfm_f[j].observation[k].first == i)// 判断图像帧索引是否相同
 			{
+				// 通过观测得到2D像素点
 				Vector2d img_pts = sfm_f[j].observation[k].second;
 				cv::Point2f pts_2(img_pts(0), img_pts(1));
 				pts_2_vector.push_back(pts_2);
+				// 通过position得到路标3D坐标，position在triangulate中计算得
 				cv::Point3f pts_3(sfm_f[j].position[0], sfm_f[j].position[1], sfm_f[j].position[2]);
 				pts_3_vector.push_back(pts_3);
 				break;
@@ -70,7 +75,10 @@ bool GlobalSFM::solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i,
 	return true;
 
 }
-
+/* @brief 三角化frame0和frame1间所有对应点
+ * @param[in]  frame,Pose 帧索引和位姿数据
+ * @param[out]   sfm_f的state和position 3D坐标
+ */
 void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Pose0, 
 									 int frame1, Eigen::Matrix<double, 3, 4> &Pose1,
 									 vector<SFMFeature> &sfm_f)
@@ -78,13 +86,13 @@ void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Po
 	assert(frame0 != frame1);
 	for (int j = 0; j < feature_num; j++)
 	{
-		if (sfm_f[j].state == true)
+		if (sfm_f[j].state == true)// 没有三角化的话才开始三角化
 			continue;
 		bool has_0 = false, has_1 = false;
 		Vector2d point0;
 		Vector2d point1;
 		for (int k = 0; k < (int)sfm_f[j].observation.size(); k++)
-		{
+		{// 找到对应的帧索引，取出2D像素坐标
 			if (sfm_f[j].observation[k].first == frame0)
 			{
 				point0 = sfm_f[j].observation[k].second;
@@ -96,6 +104,7 @@ void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Po
 				has_1 = true;
 			}
 		}
+
 		if (has_0 && has_1)
 		{
 			Vector3d point_3d;
@@ -114,6 +123,18 @@ void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Po
 //  c_translation cam_R_w
 // relative_q[i][j]  j_q_i
 // relative_t[i][j]  j_t_ji  (j < i)
+/**
+ * @brief   纯视觉sfm，求解窗口中的所有图像帧相对于第l帧的位姿和三角化的特征点坐标
+ * @param[in]   frame_num	窗口总帧数（frame_count + 1）
+ * @param[out]  q 	窗口内图像帧的旋转四元数q（相对于第l帧）Q[frame_count + 1]
+ * @param[out]	T 	窗口内图像帧的平移向量T（相对于第l帧）
+ * @param[in]  	l 	第l帧
+ * @param[in]  	relative_R	当前帧到第l帧的旋转矩阵
+ * @param[in]  	relative_T 	当前帧到第l帧的平移向量
+ * @param[in]  	sfm_f		所有特征点
+ * @param[out]  sfm_tracked_points 所有在sfm中三角化的特征点ID和坐标
+ * @return  bool true:sfm求解成功
+*/
 bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 			  const Matrix3d relative_R, const Vector3d relative_T,
 			  vector<SFMFeature> &sfm_f, map<int, Vector3d> &sfm_tracked_points)
@@ -122,30 +143,31 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	//cout << "set 0 and " << l << " as known " << endl;
 	// have relative_r relative_t
 	// intial two view
-	q[l].w() = 1;
+	//假设第l帧为原点，根据当前帧到第l帧的relative_R，relative_T，得到当前帧位姿
+	q[l].w() = 1;// 第l帧
 	q[l].x() = 0;
 	q[l].y() = 0;
 	q[l].z() = 0;
 	T[l].setZero();
-	q[frame_num - 1] = q[l] * Quaterniond(relative_R);
+	q[frame_num - 1] = q[l] * Quaterniond(relative_R);// 当前帧
 	T[frame_num - 1] = relative_T;
 	//cout << "init q_l " << q[l].w() << " " << q[l].vec().transpose() << endl;
 	//cout << "init t_l " << T[l].transpose() << endl;
 
 	//rotate to cam frame
-	Matrix3d c_Rotation[frame_num];
-	Vector3d c_Translation[frame_num];
-	Quaterniond c_Quat[frame_num];
+	Matrix3d c_Rotation[frame_num];// 旋转
+	Vector3d c_Translation[frame_num];// 平移
+	Quaterniond c_Quat[frame_num];// 旋转四元数
 	double c_rotation[frame_num][4];
 	double c_translation[frame_num][3];
-	Eigen::Matrix<double, 3, 4> Pose[frame_num];
-
+	Eigen::Matrix<double, 3, 4> Pose[frame_num];// 位姿3*4，第l帧到每一帧变换矩阵
+    // 第l帧
 	c_Quat[l] = q[l].inverse();
-	c_Rotation[l] = c_Quat[l].toRotationMatrix();
+	c_Rotation[l] = c_Quat[l].toRotationMatrix();//  c_rotation cam_R_w //  c_translation cam_R_w
 	c_Translation[l] = -1 * (c_Rotation[l] * T[l]);
 	Pose[l].block<3, 3>(0, 0) = c_Rotation[l];
 	Pose[l].block<3, 1>(0, 3) = c_Translation[l];
-
+    // 滑动窗最后一帧，即当前帧
 	c_Quat[frame_num - 1] = q[frame_num - 1].inverse();
 	c_Rotation[frame_num - 1] = c_Quat[frame_num - 1].toRotationMatrix();
 	c_Translation[frame_num - 1] = -1 * (c_Rotation[frame_num - 1] * T[frame_num - 1]);
@@ -158,7 +180,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	for (int i = l; i < frame_num - 1 ; i++)
 	{
 		// solve pnp
-		if (i > l)
+		if (i > l)//这里其实是两部分，当i==l时，不进入if 语句，直接进行三角化triangulateTwoFrames
 		{
 			Matrix3d R_initial = c_Rotation[i - 1];
 			Vector3d P_initial = c_Translation[i - 1];
@@ -172,6 +194,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 		}
 
 		// triangulate point based on the solve pnp result
+		// l,l+1,l+2.....framenum-2和framenum-1 三角化恢复路标3D坐标
 		triangulateTwoFrames(i, Pose[i], frame_num - 1, Pose[frame_num - 1], sfm_f);
 	}
 	//3: triangulate l-----l+1 l+2 ... frame_num -2

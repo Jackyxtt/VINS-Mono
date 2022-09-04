@@ -116,8 +116,8 @@ class Estimator
 
     int loop_window_index;
 
-    MarginalizationInfo *last_marginalization_info;
-    vector<double *> last_marginalization_parameter_blocks;
+    MarginalizationInfo *last_marginalization_info; //上一轮留下来的残差信息
+    vector<double *> last_marginalization_parameter_blocks; //last_marginalization_parameter_blocks是上一轮留下来的残差块
 
     map<double, ImageFrame> all_image_frame;
     IntegrationBase *tmp_pre_integration;

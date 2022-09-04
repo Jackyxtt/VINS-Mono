@@ -293,9 +293,10 @@ void extrinsic_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
 
 void process()
 {
+    //1.是否进行闭环检测的判断,不过不做闭环检测则直接返回
     if (!LOOP_CLOSURE)
         return;
-    while (true)
+    while (true)//该线程一直在循环执行
     {
         sensor_msgs::ImageConstPtr image_msg = NULL;
         sensor_msgs::PointCloudConstPtr point_msg = NULL;
@@ -303,13 +304,16 @@ void process()
 
         // find out the messages with same time stamp
         m_buf.lock();
+        //2.获取“相同时间戳”内的pose_msg、image_msg、point_msg
         if(!image_buf.empty() && !point_buf.empty() && !pose_buf.empty())
         {
+            //图像时间戳晚于位姿时间戳，则将该位姿pop出去
             if (image_buf.front()->header.stamp.toSec() > pose_buf.front()->header.stamp.toSec())
             {
                 pose_buf.pop();
                 printf("throw pose at beginning\n");
             }
+            //图像时间戳晚于点云时间戳，则将点云位姿pop出去
             else if (image_buf.front()->header.stamp.toSec() > point_buf.front()->header.stamp.toSec())
             {
                 point_buf.pop();
@@ -503,7 +507,7 @@ int main(int argc, char **argv)
         VISUALIZE_IMU_FORWARD = fsSettings["visualize_imu_forward"];
         LOAD_PREVIOUS_POSE_GRAPH = fsSettings["load_previous_pose_graph"];
         FAST_RELOCALIZATION = fsSettings["fast_relocalization"];
-        VINS_RESULT_PATH = VINS_RESULT_PATH + "/vins_result_loop.csv";
+        VINS_RESULT_PATH = VINS_RESULT_PATH + "/vins_result_loop.txt";
         std::ofstream fout(VINS_RESULT_PATH, std::ios::out);
         fout.close();
         fsSettings.release();

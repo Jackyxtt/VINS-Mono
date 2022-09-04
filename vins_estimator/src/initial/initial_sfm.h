@@ -15,11 +15,11 @@ using namespace std;
 
 struct SFMFeature
 {
-    bool state;
-    int id;
-    vector<pair<int,Vector2d>> observation;
-    double position[3];
-    double depth;
+    bool state;//特征点的状态（是否被三角化
+    int id;//特征点ID
+    vector<pair<int,Vector2d>> observation;//所有观测到该特征点的图像帧ID和 2D像素坐标
+    double position[3];//路标3D坐标
+    double depth;//深度
 };
 
 struct ReprojectionError3D
@@ -62,13 +62,15 @@ public:
 			  vector<SFMFeature> &sfm_f, map<int, Vector3d> &sfm_tracked_points);
 
 private:
+// PnP得到当前帧相对于第l帧的位姿
 	bool solveFrameByPnP(Matrix3d &R_initial, Vector3d &P_initial, int i, vector<SFMFeature> &sfm_f);
-
+// 三角化点
 	void triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matrix<double, 3, 4> &Pose1,
 							Vector2d &point0, Vector2d &point1, Vector3d &point_3d);
+	// 三角化两帧
 	void triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Pose0, 
 							  int frame1, Eigen::Matrix<double, 3, 4> &Pose1,
 							  vector<SFMFeature> &sfm_f);
 
-	int feature_num;
+	int feature_num;// 特征点数量
 };

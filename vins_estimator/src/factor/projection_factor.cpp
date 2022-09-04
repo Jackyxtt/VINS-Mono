@@ -1,5 +1,7 @@
 #include "projection_factor.h"
 
+//视觉约束的协方差，与标定相机内参时的重投影误差有关，vins取1.5个像素，对应到归一化相机平面需要除焦距f，最后得到信息矩阵，信息矩阵是sqrt_info的平方
+//Estimator::setParameter()中设置
 Eigen::Matrix2d ProjectionFactor::sqrt_info;
 double ProjectionFactor::sum_t;
 

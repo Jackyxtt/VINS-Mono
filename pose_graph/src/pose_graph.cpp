@@ -76,7 +76,9 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
 	{
         //printf(" %d detect loop with %d \n", cur_kf->index, loop_index);
         KeyFrame* old_kf = getKeyFrame(loop_index);
-
+         /**
+         * 判断当前帧与闭环候选帧之间匹配的特征点数是否大于形成闭环的最小匹配点数
+         * */
         if (cur_kf->findConnection(old_kf))
         {
             if (earliest_loop_index > loop_index || earliest_loop_index == -1)
@@ -86,20 +88,25 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
             Matrix3d w_R_old, w_R_cur, vio_R_cur;
             old_kf->getVioPose(w_P_old, w_R_old);
             cur_kf->getVioPose(vio_P_cur, vio_R_cur);
-
+            //relative_q为当前帧与闭环帧之间的相对旋转，relative_t为当前帧与闭环帧之间的相对平移
             Vector3d relative_t;
             Quaterniond relative_q;
             relative_t = cur_kf->getLoopRelativeT();
             relative_q = (cur_kf->getLoopRelativeQ()).toRotationMatrix();
+            //根据旧的闭环关键帧和其与当前关键帧的相对平移和相对旋转重新计算当前帧在世界坐标系下的位姿
             w_P_cur = w_R_old * relative_t + w_P_old;
             w_R_cur = w_R_old * relative_q;
             double shift_yaw;
             Matrix3d shift_r;
             Vector3d shift_t; 
+            //计算根据闭环帧得到的位姿和当前vio之间的偏差
             shift_yaw = Utility::R2ypr(w_R_cur).x() - Utility::R2ypr(vio_R_cur).x();
+            //旋转偏差
             shift_r = Utility::ypr2R(Vector3d(shift_yaw, 0, 0));
+            //平移的偏差
             shift_t = w_P_cur - w_R_cur * vio_R_cur.transpose() * vio_P_cur; 
             // shift vio pose of whole sequence to the world frame
+            //若闭环帧和当前帧不在同一个图像序列当中，则更新当前帧的位姿，并将关键帧列表中和当前帧处于相同序列的其他关键帧位姿进行更新
             if (old_kf->sequence != cur_kf->sequence && sequence_loop[cur_kf->sequence] == 0)
             {  
                 w_r_vio = shift_r;
@@ -123,6 +130,7 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
                 sequence_loop[cur_kf->sequence] = 1;
             }
             m_optimize_buf.lock();
+            //这里将当前帧放入到优化队列当中，在另一个单独创建的线程中进行优化
             optimize_buf.push(cur_kf->index);
             m_optimize_buf.unlock();
         }
@@ -150,19 +158,35 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
 
     if (SAVE_LOOP_PATH)
     {
+        // ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+        // loop_path_file.setf(ios::fixed, ios::floatfield);
+        // loop_path_file.precision(0);
+        // loop_path_file << cur_kf->time_stamp * 1e9 << ",";
+        // loop_path_file.precision(5);
+        // loop_path_file  << P.x() << ","
+        //       << P.y() << ","
+        //       << P.z() << ","
+        //       << Q.w() << ","
+        //       << Q.x() << ","
+        //       << Q.y() << ","
+        //       << Q.z() << ","
+        //       << endl;
         ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
         loop_path_file.setf(ios::fixed, ios::floatfield);
-        loop_path_file.precision(0);
-        loop_path_file << cur_kf->time_stamp * 1e9 << ",";
         loop_path_file.precision(5);
-        loop_path_file  << P.x() << ","
-              << P.y() << ","
-              << P.z() << ","
-              << Q.w() << ","
-              << Q.x() << ","
-              << Q.y() << ","
-              << Q.z() << ","
-              << endl;
+        loop_path_file << cur_kf->time_stamp << " ";
+        loop_path_file.precision(5);
+        loop_path_file  << P.x() << " "
+                        << P.y() << " "
+                        << P.z() << " "
+                        << Q.x() << " "
+                        << Q.y() << " "
+                        << Q.z() << " "
+                        << Q.w() 
+                        // << " addKeyFrame" 
+                        << endl;
+        // ROS_INFO("pose_graph.cpp addKeyFrame function");
+        // cout << "pose_graph.cpp addKeyFrame function: " << VINS_RESULT_PATH << endl; 
         loop_path_file.close();
     }
     //draw local connection
@@ -520,15 +544,15 @@ void PoseGraph::optimize4DoF()
             m_keyframelist.unlock();
 
             ceres::Solve(options, &problem, &summary);
-            //std::cout << summary.BriefReport() << "\n";
+            std::cout << summary.BriefReport() << "\n";
             
-            //printf("pose optimization time: %f \n", tmp_t.toc());
-            /*
+            printf("pose optimization time: %f \n", tmp_t.toc());
+            
             for (int j = 0 ; j < i; j++)
             {
                 printf("optimize i: %d p: %f, %f, %f\n", j, t_array[j][0], t_array[j][1], t_array[j][2] );
             }
-            */
+            
             m_keyframelist.lock();
             i = 0;
             for (it = keyframelist.begin(); it != keyframelist.end(); it++)
@@ -627,20 +651,37 @@ void PoseGraph::updatePath()
 
         if (SAVE_LOOP_PATH)
         {
+            // ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+            // loop_path_file.setf(ios::fixed, ios::floatfield);
+            // loop_path_file.precision(0);
+            // loop_path_file << (*it)->time_stamp * 1e9 << ",";
+            // loop_path_file.precision(5);
+            // loop_path_file  << P.x() << ","
+            //       << P.y() << ","
+            //       << P.z() << ","
+            //       << Q.w() << ","
+            //       << Q.x() << ","
+            //       << Q.y() << ","
+            //       << Q.z() << ","
+            //       << endl;
+            // loop_path_file.close();
             ofstream loop_path_file(VINS_RESULT_PATH, ios::app);
+            // ofstream loop_path_file("/media/yxt/storage/SLAM_demo/VINS_Mono_ws/src/VINS-Mono/update.txt", ios::app);
             loop_path_file.setf(ios::fixed, ios::floatfield);
-            loop_path_file.precision(0);
-            loop_path_file << (*it)->time_stamp * 1e9 << ",";
             loop_path_file.precision(5);
-            loop_path_file  << P.x() << ","
-                  << P.y() << ","
-                  << P.z() << ","
-                  << Q.w() << ","
-                  << Q.x() << ","
-                  << Q.y() << ","
-                  << Q.z() << ","
-                  << endl;
-            loop_path_file.close();
+            loop_path_file << (*it)->time_stamp<< " ";
+            loop_path_file.precision(5);
+            loop_path_file  << P.x() << " "
+                            << P.y() << " "
+                            << P.z() << " "
+                            << Q.x() << " "
+                            << Q.y() << " "
+                            << Q.z() << " "
+                            << Q.w() 
+                            // << " updatePath" 
+                            << endl;
+            // ROS_INFO("pose_graph.cpp updatePath function");
+            // cout << "pose_graph.cpp updatePath function: " << VINS_RESULT_PATH << endl;
         }
         //draw local connection
         if (SHOW_S_EDGE)

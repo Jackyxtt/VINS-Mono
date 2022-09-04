@@ -1,0 +1,5 @@
+<launch>
+    <node name="subscribe_compressed" pkg="compressed_image" type="compressed_image" output="log">
+    </node>
+
+</launch>

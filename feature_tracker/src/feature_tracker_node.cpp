@@ -13,7 +13,8 @@
 
 vector<uchar> r_status;
 vector<float> r_err;
-queue<sensor_msgs::ImageConstPtr> img_buf;
+// queue<sensor_msgs::CompressedImageConstPtr> img_buf; //压缩图像
+queue<sensor_msgs::ImageConstPtr> img_buf;//未压缩图像
 
 ros::Publisher pub_img,pub_match;
 ros::Publisher pub_restart;
@@ -25,8 +26,10 @@ bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
+// void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
+    // 1.判断是否是第一帧
     if(first_image_flag)
     {
         first_image_flag = false;
@@ -35,6 +38,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         return;
     }
     // detect unstable camera stream
+    // 2.通过时间间隔判断相机数据流是否稳定，有问题则restart
     if (img_msg->header.stamp.toSec() - last_image_time > 1.0 || img_msg->header.stamp.toSec() < last_image_time)
     {
         ROS_WARN("image discontinue! reset the feature tracker!");
@@ -46,12 +50,17 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         pub_restart.publish(restart_flag);
         return;
     }
-    last_image_time = img_msg->header.stamp.toSec();
+    last_image_time = img_msg->header.stamp.toSec();// 更新上一帧图像时间戳
+
     // frequency control
+    // 3.发布频率控制，保证每秒钟处理的Image小于FREQ，频率控制在10HZ以内
+    // 并不是每读入一帧图像，就要发布特征点
+    // 判断间隔时间内的发布次数
     if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
     {
         PUB_THIS_FRAME = true;
         // reset the frequency control
+        // 时间间隔内的发布频率十分接近设定频率时，更新时间间隔起始时刻，并将数据发布次数置0
         if (abs(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time) - FREQ) < 0.01 * FREQ)
         {
             first_image_time = img_msg->header.stamp.toSec();
@@ -61,8 +70,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     else
         PUB_THIS_FRAME = false;
 
+     // 4.将图像编码8UC1转换为mono8,单色8bit
     cv_bridge::CvImageConstPtr ptr;
-    if (img_msg->encoding == "8UC1")
+    if (img_msg->encoding == "8UC3")
     {
         sensor_msgs::Image img;
         img.header = img_msg->header;
@@ -79,14 +89,17 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
     cv::Mat show_img = ptr->image;
     TicToc t_r;
+
+    // 5. 重要！！！trackerData[i].readImage读取图像数据
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
-        if (i != 1 || !STEREO_TRACK)
+        if (i != 1 || !STEREO_TRACK)//单目
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
-        else
+        else//双目
         {
-            if (EQUALIZE)
+            if (EQUALIZE)// 光太亮或太暗，自适应直方图均衡化处理
+
             {
                 cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
                 clahe->apply(ptr->image.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
@@ -100,6 +113,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 #endif
     }
 
+    // 6.更新全局ID
     for (unsigned int i = 0;; i++)
     {
         bool completed = false;
@@ -110,6 +124,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             break;
     }
 
+    // 7、将特征点id，矫正后归一化平面的3D点(x,y,z=1)，像素2D点(u,v)，像素的速度(vx,vy)，
+    //封装成sensor_msgs::PointCloudPtr类型的feature_points实例中,发布到pub_img;
    if (PUB_THIS_FRAME)
    {
         pub_count++;
@@ -123,20 +139,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         feature_points->header = img_msg->header;
         feature_points->header.frame_id = "world";
 
-        vector<set<int>> hash_ids(NUM_OF_CAM);
-        for (int i = 0; i < NUM_OF_CAM; i++)
+        vector<set<int>> hash_ids(NUM_OF_CAM);// 哈希表id
+        for (int i = 0; i < NUM_OF_CAM; i++)// 循环相机数量
         {
             auto &un_pts = trackerData[i].cur_un_pts;
             auto &cur_pts = trackerData[i].cur_pts;
             auto &ids = trackerData[i].ids;
             auto &pts_velocity = trackerData[i].pts_velocity;
-            for (unsigned int j = 0; j < ids.size(); j++)
+            for (unsigned int j = 0; j < ids.size(); j++)// 特征点数量
             {
-                if (trackerData[i].track_cnt[j] > 1)
+                if (trackerData[i].track_cnt[j] > 1)// 该特征点被追踪次数大于1
                 {
                     int p_id = ids[j];
-                    hash_ids[i].insert(p_id);
-                    geometry_msgs::Point32 p;
+                    hash_ids[i].insert(p_id);// 哈希表id  insert
+                    geometry_msgs::Point32 p;// 大规模点云信息
                     p.x = un_pts[j].x;
                     p.y = un_pts[j].y;
                     p.z = 1;
@@ -163,7 +179,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         }
         else
             pub_img.publish(feature_points);
-
+        // 8、将图像封装到cv_bridge::cvtColor类型的ptr实例中发布到pub_match
         if (SHOW_TRACK)
         {
             ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
@@ -174,13 +190,13 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             {
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
                 cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
-
+                //显示追踪状态，越红越好，越蓝越不行
                 for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                 {
                     double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
                     cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     //draw speed line
-                    /*
+                    
                     Vector2d tmp_cur_un_pts (trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
                     Vector2d tmp_pts_velocity (trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y);
                     Vector3d tmp_prev_un_pts;
@@ -189,14 +205,14 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     Vector2d tmp_prev_uv;
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
                     cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0), 1 , 8, 0);
-                    */
-                    //char name[10];
-                    //sprintf(name, "%d", trackerData[i].ids[j]);
-                    //cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                    
+                    char name[10];
+                    sprintf(name, "%d", trackerData[i].ids[j]);
+                    cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }
-            //cv::imshow("vis", stereo_img);
-            //cv::waitKey(5);
+            cv::imshow("vis", stereo_img);
+            cv::waitKey(5);
             pub_match.publish(ptr->toImageMsg());
         }
     }
@@ -228,10 +244,14 @@ int main(int argc, char **argv)
         }
     }
 
+    // 4.订阅话题IMAGE_TOPIC(/cam0/image_raw),有图像发布到这个话题时，执行回调函数img_callback
     ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
 
+    // 5.发布feature点云，实例feature_points，跟踪的特征点，给后端优化用
     pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
+    //发布feature_img，实例ptr，跟踪的特征点图，给RVIZ用和调试用
     pub_match = n.advertise<sensor_msgs::Image>("feature_img",1000);
+    //发布restart
     pub_restart = n.advertise<std_msgs::Bool>("restart",1000);
     /*
     if (SHOW_TRACK)

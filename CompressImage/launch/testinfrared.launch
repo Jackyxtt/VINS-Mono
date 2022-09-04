@@ -1,0 +1,5 @@
+<launch>
+    <node name="subscribe_infrared" pkg="compressed_image" type="infrared_image" output="log">
+    </node>
+
+</launch>
