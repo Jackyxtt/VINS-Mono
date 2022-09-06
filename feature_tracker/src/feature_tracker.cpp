@@ -90,8 +90,8 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
     TicToc t_r;
     cur_time = _cur_time;
 
-    std::cout << "conversion begins" << std::endl;
-    ROS_INFO("conversion begins");
+    // std::cout << "conversion begins" << std::endl;
+    // ROS_INFO("conversion begins");
 
     if(img0.channels()==3)
     {
@@ -101,8 +101,8 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
     {
         cvtColor(img0,img0,CV_BGRA2GRAY);
     }
-    ROS_INFO("after conversion img0 is %d", img0.channels());
-    std::cout << "conversion ends" << std::endl;
+    // ROS_INFO("after conversion img0 is %d", img0.channels());
+    // std::cout << "conversion ends" << std::endl;
 
      // 1.如果EQUALIZE=1，表示太亮或太暗，进行直方图均衡化处理
     if (EQUALIZE)
