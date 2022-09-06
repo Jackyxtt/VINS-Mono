@@ -70,7 +70,7 @@ load_previous_pose_graph: 0 # load and reuse previous pose graph; load from 'pos
 pose_graph_save_path: "/media/yxt/storage/SLAM_demo/VINS_Mono_ws/src/VINS-Mono" # save and load path
 
 #unsynchronization parameters
-estimate_td: 1 # online estimate time offset between camera and imu
+estimate_td: 0 # online estimate time offset between camera and imu
 td: 0.000 # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #rolling shutter parameters

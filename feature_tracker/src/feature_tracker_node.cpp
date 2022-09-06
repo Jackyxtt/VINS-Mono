@@ -13,8 +13,8 @@
 
 vector<uchar> r_status;
 vector<float> r_err;
-// queue<sensor_msgs::CompressedImageConstPtr> img_buf; //压缩图像
-queue<sensor_msgs::ImageConstPtr> img_buf;//未压缩图像
+queue<sensor_msgs::CompressedImageConstPtr> img_buf; //压缩图像
+// queue<sensor_msgs::ImageConstPtr> img_buf;//未压缩图像
 
 ros::Publisher pub_img,pub_match;
 ros::Publisher pub_restart;
@@ -26,8 +26,8 @@ bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
-// void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
-void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
+void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
+// void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     // 1.判断是否是第一帧
     if(first_image_flag)
@@ -72,22 +72,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
      // 4.将图像编码8UC1转换为mono8,单色8bit
     cv_bridge::CvImageConstPtr ptr;
-    if (img_msg->encoding == "8UC3")
-    {
-        sensor_msgs::Image img;
-        img.header = img_msg->header;
-        img.height = img_msg->height;
-        img.width = img_msg->width;
-        img.is_bigendian = img_msg->is_bigendian;
-        img.step = img_msg->step;
-        img.data = img_msg->data;
-        img.encoding = "bgr8";
-        ptr = cv_bridge::toCvCopy(img, "bgr8");
-    }
-    else{
+
         // std::cout << "toCvCopy 8UC3 to BGR8" << std::endl;
-        ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::BGR8);
-    }
+    ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::BGR8);
         
 
     cv::Mat show_img = ptr->image;
@@ -227,7 +214,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "feature_tracker");
     ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     readParameters(n);
 
     for (int i = 0; i < NUM_OF_CAM; i++)
