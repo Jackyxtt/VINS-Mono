@@ -227,7 +227,6 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
     // 11. 根据不同的相机模型去畸变矫正和转换到归一化坐标系上，计算速度
     undistortedPoints();
     prev_time = cur_time;
-    ROS_INFO("finish undistortion");
 }
 
 void FeatureTracker::rejectWithF()
