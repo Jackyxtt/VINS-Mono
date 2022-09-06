@@ -548,10 +548,10 @@ void PoseGraph::optimize4DoF()
             
             printf("pose optimization time: %f \n", tmp_t.toc());
             
-            for (int j = 0 ; j < i; j++)
-            {
-                printf("optimize i: %d p: %f, %f, %f\n", j, t_array[j][0], t_array[j][1], t_array[j][2] );
-            }
+            // for (int j = 0 ; j < i; j++)
+            // {
+            //     printf("optimize i: %d p: %f, %f, %f\n", j, t_array[j][0], t_array[j][1], t_array[j][2] );
+            // }
             
             m_keyframelist.lock();
             i = 0;

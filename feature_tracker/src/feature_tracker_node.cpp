@@ -81,11 +81,14 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         img.is_bigendian = img_msg->is_bigendian;
         img.step = img_msg->step;
         img.data = img_msg->data;
-        img.encoding = "mono8";
-        ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+        img.encoding = "bgr8";
+        ptr = cv_bridge::toCvCopy(img, "bgr8");
     }
-    else
-        ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+    else{
+        // std::cout << "toCvCopy 8UC3 to BGR8" << std::endl;
+        ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::BGR8);
+    }
+        
 
     cv::Mat show_img = ptr->image;
     TicToc t_r;
@@ -182,14 +185,15 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         // 8、将图像封装到cv_bridge::cvtColor类型的ptr实例中发布到pub_match
         if (SHOW_TRACK)
         {
-            ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
+            // 应该是这个地方报错
+            // ptr = cv_bridge::cvtColor(ptr, "mono8");
             //cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
             cv::Mat stereo_img = ptr->image;
 
             for (int i = 0; i < NUM_OF_CAM; i++)
             {
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
-                cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
+                // cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
                 //显示追踪状态，越红越好，越蓝越不行
                 for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                 {
