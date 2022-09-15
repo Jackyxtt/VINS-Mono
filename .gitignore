@@ -14,3 +14,5 @@ test.launch
 .vscode/
 .idea/
 vins_estimator/cmake-build-debug
+M2DGR/
+*.pptx
