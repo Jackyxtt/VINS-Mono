@@ -45,7 +45,7 @@ struct ReprojectionError3D
 	                                   const double observed_y) 
 	{
 	  return (new ceres::AutoDiffCostFunction<
-	          ReprojectionError3D, 2, 4, 3, 3>(
+	          ReprojectionError3D, 2, 4, 3, 3>( //第一个数字2为残差的维度，后面的参数分别为待优化变量的维度
 	          	new ReprojectionError3D(observed_x,observed_y)));
 	}
 
