@@ -48,8 +48,8 @@ int FeatureManager::getFeatureCount()
 */
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
-    ROS_DEBUG("input feature: %d", (int)image.size());
-    ROS_DEBUG("num of feature: %d", getFeatureCount());
+    ROS_DEBUG("featureNode: input feature: %d", (int)image.size());
+    ROS_DEBUG("featureNode: num of feature: %d", getFeatureCount());
     // 用于记录所有特征点的视差总和
     double parallax_sum = 0;
     // 记录满足某些条件的特征点个数
@@ -104,8 +104,8 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     }
     else
     {
-        ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
-        ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
+        ROS_DEBUG("featureNode: parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
+        ROS_DEBUG("featureNode: current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
         // 4.2 平均视差大于阈值的是关键帧
         return parallax_sum / parallax_num >= MIN_PARALLAX;
     }
@@ -113,7 +113,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
 
 void FeatureManager::debugShow()
 {
-    ROS_DEBUG("debug show");
+    ROS_DEBUG("featureNode: debug show");
     for (auto &it : feature)
     {
         ROS_ASSERT(it.feature_per_frame.size() != 0);

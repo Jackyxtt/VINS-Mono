@@ -319,7 +319,7 @@ void process()
                 estimator.setReloFrame(frame_stamp, frame_index, match_points, relo_t, relo_r);
             }
 
-            ROS_DEBUG("processing vision data with stamp %f \n", img_msg->header.stamp.toSec());
+            ROS_DEBUG("estimatorNode: processing vision data with stamp %f \n", img_msg->header.stamp.toSec());
 
             TicToc t_s;
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
@@ -388,9 +388,9 @@ int main(int argc, char **argv)
     readParameters(n);
     estimator.setParameter();
 #ifdef EIGEN_DONT_PARALLELIZE
-    ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
+    ROS_DEBUG("estimatorNode: EIGEN_DONT_PARALLELIZE");
 #endif
-    ROS_WARN("waiting for image and imu...");
+    ROS_WARN("estimatorNode: waiting for image and imu...");
 
     registerPub(n);
 

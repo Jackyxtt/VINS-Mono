@@ -220,7 +220,7 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
          *      OutputArray mask = noArray()    在计算过程中没有被舍弃的点
          *  ) 
         */   
-        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, 0.3 / 460, 0.99, mask);
+        cv::Mat E = cv::findFundamentalMat(ll, rr, cv::FM_RANSAC, 5 / 593, 0.99, mask);
         cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
         cv::Mat rot, trans;
 
@@ -250,9 +250,15 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
         Rotation = R.transpose();
         Translation = -R.transpose() * T;
         if(inlier_cnt > 12)
+        {
+            ROS_DEBUG("estimatorNode init: current inlier num is %d", inlier_cnt);
             return true;
-        else
+        }
+        else{
+            ROS_DEBUG("estimatorNode init: current inlier num is %d", inlier_cnt);
             return false;
+        }
+            
     }
     return false;
 }

@@ -1,5 +1,5 @@
 <launch>
-    <arg name="config_path" default = "$(find feature_tracker)/../config/mytest/paperthermal_vins.yaml" />
+    <arg name="config_path" default = "$(find feature_tracker)/../config/m2dgr/paperthermal_vins.yaml" />
 	  <arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
     
     <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="screen">

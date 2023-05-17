@@ -127,18 +127,18 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
 */
 void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const std_msgs::Header &header)
 {
-    ROS_DEBUG("new image coming ------------------------------------------");
-    ROS_DEBUG("Adding feature points %lu", image.size());
+    ROS_DEBUG("estimatorNode: new image coming ------------------------------------------");
+    ROS_DEBUG("estimatorNode: Adding feature points %lu", image.size());
     // 1. 通过检测两帧之间的视差决定次新帧是否作为关键帧
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))//添加之前检测到的特征点到feature容器中，计算每一个点跟踪的次数，以及它的视差
         marginalization_flag = MARGIN_OLD;//=0
     else
         marginalization_flag = MARGIN_SECOND_NEW;//=1
 
-    ROS_DEBUG("this frame is--------------------%s", marginalization_flag ? "reject" : "accept");
+    ROS_DEBUG("estimatorNode: this frame is--------------------%s", marginalization_flag ? "reject" : "accept");
     ROS_DEBUG("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
-    ROS_DEBUG("Solving %d", frame_count);
-    ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
+    ROS_DEBUG("estimatorNode: Solving %d", frame_count);
+    ROS_DEBUG("estimatorNode: number of feature: %d", f_manager.getFeatureCount());
     Headers[frame_count] = header;
   // 2. 填充imageframe的容器以及更新临时预积分初始值
     ImageFrame imageframe(image, header.stamp.toSec());//ImageFrame类包括特征点、时间、位姿Rt、预积分对象pre_integration、是否关键帧
@@ -208,22 +208,22 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
     {
         TicToc t_solve;
         solveOdometry();// 5.1 非线性化求解里程计
-        ROS_DEBUG("solver costs: %fms", t_solve.toc());
+        ROS_DEBUG("estimatorNode: solver costs: %fms", t_solve.toc());
         //5.2 故障检测与恢复,一旦检测到故障，系统将切换回初始化阶段
         if (failureDetection())
         {
-            ROS_WARN("failure detection!");
+            ROS_WARN("estimatorNode: failure detection!");
             failure_occur = 1;
             clearState();// 清空状态
             setParameter();// 重设参数
-            ROS_WARN("system reboot!");
+            ROS_WARN("estimatorNode: system reboot!");
             return;
         }
 
         TicToc t_margin;
         slideWindow();// 5.3 滑动窗口
         f_manager.removeFailures();// 5.4 移除失败的
-        ROS_DEBUG("marginalization costs: %fms", t_margin.toc());
+        ROS_DEBUG("estimatorNode: marginalization costs: %fms", t_margin.toc());
         // prepare output of VINS
         key_poses.clear();
         for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -308,7 +308,7 @@ bool Estimator::initialStructure()
               sfm_f, sfm_tracked_points))
     {
         // 求解失败则边缘化最早一帧并滑动窗口
-        ROS_DEBUG("global SFM failed!");
+        ROS_DEBUG("estimatorNode: global SFM failed!");
         marginalization_flag = MARGIN_OLD;
         return false;
     }
@@ -367,12 +367,12 @@ bool Estimator::initialStructure()
         if(pts_3_vector.size() < 6)
         {
             cout << "pts_3_vector size " << pts_3_vector.size() << endl;
-            ROS_DEBUG("Not enough points for solve pnp !");
+            ROS_DEBUG("estimatorNode: Not enough points for solve pnp !");
             return false;
         }
         if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
         {
-            ROS_DEBUG("solve pnp fail!");
+            ROS_DEBUG("estimatorNode: solve pnp fail!");
             return false;
         }
         cv::Rodrigues(rvec, r);
@@ -404,7 +404,7 @@ bool Estimator::visualInitialAlign()
     bool result = VisualIMUAlignment(all_image_frame, Bgs, g, x);
     if(!result)
     {
-        ROS_DEBUG("solve g failed!");
+        ROS_DEBUG("estimatorNode: solve g failed!");
         return false;
     }
 
@@ -480,8 +480,8 @@ bool Estimator::visualInitialAlign()
         Rs[i] = rot_diff * Rs[i];
         Vs[i] = rot_diff * Vs[i];
     }
-    ROS_DEBUG_STREAM("g0     " << g.transpose());
-    ROS_DEBUG_STREAM("my R0  " << Utility::R2ypr(Rs[0]).transpose()); 
+    ROS_DEBUG_STREAM("estimatorNode: g0     " << g.transpose());
+    ROS_DEBUG_STREAM("estimatorNode: my R0  " << Utility::R2ypr(Rs[0]).transpose()); 
 
     return true;
 }
@@ -520,11 +520,13 @@ bool Estimator::relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l)
               //判断是否满足初始化条件：视差>30和内点数满足要求
             //同时返回窗口最后一帧（当前帧）到第l帧（参考帧）的Rt
             average_parallax = 1.0 * sum_parallax / int(corres.size());
-            if(average_parallax * 460 > 30 && m_estimator.solveRelativeRT(corres, relative_R, relative_T))
+            if(average_parallax * FOCAL_LENGTH > 20 && m_estimator.solveRelativeRT(corres, relative_R, relative_T))
             {
                 l = i;
-                ROS_DEBUG("average_parallax %f choose l %d and newest frame to triangulate the whole structure", average_parallax * 460, l);
+                ROS_DEBUG("estimatorNode: average_parallax at init stage %f choose l %d and newest frame to triangulate the whole structure", average_parallax * FOCAL_LENGTH, l);
                 return true;
+            }else{
+                ROS_DEBUG("estimatorNode: average_parallax at init stage %f choose l %d and newest frame to triangulate the whole structure", average_parallax * FOCAL_LENGTH, l);
             }
         }
     }
@@ -539,7 +541,7 @@ void Estimator::solveOdometry()
     {
         TicToc t_tri;
         f_manager.triangulate(Ps, tic, ric);
-        ROS_DEBUG("triangulation costs %f", t_tri.toc());
+        ROS_DEBUG("estimatorNode: triangulation costs %f", t_tri.toc());
         optimization();
     }
 }
@@ -608,7 +610,7 @@ void Estimator::double2vector()
     Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0));
     if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
     {
-        ROS_DEBUG("euler singular point!");
+        ROS_DEBUG("estimatorNode: euler singular point!");
         rot_diff = Rs[0] * Quaterniond(para_Pose[0][6],
                                        para_Pose[0][3],
                                        para_Pose[0][4],
@@ -754,11 +756,11 @@ void Estimator::optimization()
         problem.AddParameterBlock(para_Ex_Pose[i], SIZE_POSE, local_parameterization);
         if (!ESTIMATE_EXTRINSIC)
         {
-            ROS_DEBUG("fix extinsic param");
+            ROS_DEBUG("estimatorNode: fix extinsic param");
             problem.SetParameterBlockConstant(para_Ex_Pose[i]);
         }
         else
-            ROS_DEBUG("estimate extinsic param");
+            ROS_DEBUG("estimatorNode: estimate extinsic param");
     }
     //添加要优化的变量：时间偏差
     if (ESTIMATE_TD)
@@ -844,8 +846,8 @@ void Estimator::optimization()
         }
     }
 
-    ROS_DEBUG("visual measurement count: %d", f_m_cnt);
-    ROS_DEBUG("prepare for ceres: %f", t_prepare.toc());
+    ROS_DEBUG("estimatorNode: visual measurement count: %d", f_m_cnt);
+    ROS_DEBUG("estimatorNode: prepare for ceres: %f", t_prepare.toc());
     //重定位残差
     if(relocalization_info)
     {
@@ -904,8 +906,8 @@ void Estimator::optimization()
     //9.开始求解
     ceres::Solve(options, &problem, &summary);
     //cout << summary.BriefReport() << endl;
-    ROS_DEBUG("Iterations : %d", static_cast<int>(summary.iterations.size()));
-    ROS_DEBUG("solver costs: %f", t_solver.toc());
+    ROS_DEBUG("estimatorNode: Iterations : %d", static_cast<int>(summary.iterations.size()));
+    ROS_DEBUG("estimatorNode: solver costs: %f", t_solver.toc());
 
     //求解完成后，将数组转化为向量
     double2vector();
@@ -1000,11 +1002,11 @@ void Estimator::optimization()
 
         TicToc t_pre_margin;
         marginalization_info->preMarginalize();
-        ROS_DEBUG("pre marginalization %f ms", t_pre_margin.toc());
+        ROS_DEBUG("estimatorNode: pre marginalization %f ms", t_pre_margin.toc());
         
         TicToc t_margin;
         marginalization_info->marginalize();
-        ROS_DEBUG("marginalization %f ms", t_margin.toc());
+        ROS_DEBUG("estimatorNode: marginalization %f ms", t_margin.toc());
 
         // 滑窗预移动
         std::unordered_map<long, double *> addr_shift;
@@ -1057,14 +1059,14 @@ void Estimator::optimization()
             }
 
             TicToc t_pre_margin;
-            ROS_DEBUG("begin marginalization");
+            ROS_DEBUG("estimatorNode: begin marginalization");
             marginalization_info->preMarginalize();
-            ROS_DEBUG("end pre marginalization, %f ms", t_pre_margin.toc());
+            ROS_DEBUG("estimatorNode: end pre marginalization, %f ms", t_pre_margin.toc());
 
             TicToc t_margin;
-            ROS_DEBUG("begin marginalization");
+            ROS_DEBUG("estimatorNode: begin marginalization");
             marginalization_info->marginalize();
-            ROS_DEBUG("end marginalization, %f ms", t_margin.toc());
+            ROS_DEBUG("estimatorNode: end marginalization, %f ms", t_margin.toc());
             
             std::unordered_map<long, double *> addr_shift;
             for (int i = 0; i <= WINDOW_SIZE; i++)
@@ -1097,9 +1099,9 @@ void Estimator::optimization()
             
         }
     }
-    ROS_DEBUG("whole marginalization costs: %f", t_whole_marginalization.toc());
+    ROS_DEBUG("estimatorNode: whole marginalization costs: %f", t_whole_marginalization.toc());
     
-    ROS_DEBUG("whole time for ceres: %f", t_whole.toc());
+    ROS_DEBUG("estimatorNode: whole time for ceres: %f", t_whole.toc());
 }
 
 void Estimator::slideWindow()

@@ -111,7 +111,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
         TicToc t_c;
         clahe->apply(img0, img);
-        ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
+        ROS_DEBUG("featureNode: CLAHE costs: %fms", t_c.toc());
     }
     else
         img = img0;
@@ -153,7 +153,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         reduceVector(ids, status);
         reduceVector(cur_un_pts, status);
         reduceVector(track_cnt, status);
-        ROS_DEBUG("temporal optical flow costs: %fms", t_o.toc());
+        ROS_DEBUG("featureNode: temporal optical flow costs: %fms", t_o.toc());
     }
 
      // 5. 光流追踪成功,特征点被成功跟踪的次数就加1
@@ -168,13 +168,13 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         rejectWithF();
 
         // 7. setMask()保证相邻的特征点之间要相隔30个像素,设置mask
-        ROS_DEBUG("set mask begins");
+        ROS_DEBUG("featureNode: set mask begins");
         TicToc t_m;
         setMask();
-        ROS_DEBUG("set mask costs %fms", t_m.toc());
+        ROS_DEBUG("featureNode: set mask costs %fms", t_m.toc());
 
         // 8. 寻找新的特征点 goodFeaturesToTrack()
-        ROS_DEBUG("detect feature begins");
+        ROS_DEBUG("featureNode: detect feature begins");
         TicToc t_t;
 
         //计算是否需要提取新的特征点
@@ -206,14 +206,14 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         }
         else
             n_pts.clear();
-        ROS_DEBUG("detect feature costs: %fms", t_t.toc());
+        ROS_DEBUG("featureNode: detect feature costs: %fms", t_t.toc());
 
         // 9. addPoints()向forw_pts添加新的追踪点
-        ROS_DEBUG("add feature begins");
+        ROS_DEBUG("featureNode: add feature begins");
         TicToc t_a;
         //添将新检测到的特征点n_pts添加到forw_pts中，id初始化-1,track_cnt初始化为1.
         addPoints();
-        ROS_DEBUG("selectFeature costs: %fms", t_a.toc());
+        ROS_DEBUG("featureNode: selectFeature costs: %fms", t_a.toc());
     }
 
     // 10. 更新帧、特征点
@@ -233,7 +233,7 @@ void FeatureTracker::rejectWithF()
 {
     if (forw_pts.size() >= 8)
     {
-        ROS_DEBUG("FM ransac begins");
+        ROS_DEBUG("featureNode: FM ransac begins");
         TicToc t_f;
         vector<cv::Point2f> un_cur_pts(cur_pts.size()), un_forw_pts(forw_pts.size());
         for (unsigned int i = 0; i < cur_pts.size(); i++)
@@ -259,8 +259,8 @@ void FeatureTracker::rejectWithF()
         reduceVector(cur_un_pts, status);
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
-        ROS_DEBUG("FM ransac: %d -> %lu: %f", size_a, forw_pts.size(), 1.0 * forw_pts.size() / size_a);
-        ROS_DEBUG("FM ransac costs: %fms", t_f.toc());
+        ROS_DEBUG("featureNode: FM ransac: %d -> %lu: %f", size_a, forw_pts.size(), 1.0 * forw_pts.size() / size_a);
+        ROS_DEBUG("featureNode: FM ransac costs: %fms", t_f.toc());
     }
 }
 

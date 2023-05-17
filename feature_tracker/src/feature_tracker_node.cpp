@@ -26,8 +26,31 @@ bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
-// void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
-void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
+
+// createImagePyramids(cv::const){
+//   cv::Mat img;
+//   cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+//   clahe->apply(cam0_curr_img_ptr->image, img);
+    
+//   const Mat& curr_cam0_img = img;//cam0_curr_img_ptr->image;
+//   buildOpticalFlowPyramid(
+//       curr_cam0_img, curr_cam0_pyramid_,
+//       Size(processor_config.patch_size, processor_config.patch_size),
+//       processor_config.pyramid_levels, true, BORDER_REFLECT_101,
+//       BORDER_CONSTANT, false);
+
+// #if 0  
+//   const Mat& curr_cam1_img = cam1_curr_img_ptr->image;
+//   buildOpticalFlowPyramid(
+//       curr_cam1_img, curr_cam1_pyramid_,
+//       Size(processor_config.patch_size, processor_config.patch_size),
+//       processor_config.pyramid_levels, true, BORDER_REFLECT_101,
+//       BORDER_CONSTANT, false);
+// #endif     
+// }
+
+void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
+// void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     // 1.判断是否是第一帧
     if(first_image_flag)
@@ -72,23 +95,11 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 
      // 4.将图像编码8UC1转换为mono8,单色8bit
     cv_bridge::CvImageConstPtr ptr;
-    if (img_msg->encoding == "8UC3")
-    {
-        sensor_msgs::Image img;
-        img.header = img_msg->header;
-        img.height = img_msg->height;
-        img.width = img_msg->width;
-        img.is_bigendian = img_msg->is_bigendian;
-        img.step = img_msg->step;
-        img.data = img_msg->data;
-        img.encoding = "bgr8";
-        ptr = cv_bridge::toCvCopy(img, "bgr8");
-    }
-    else{
+
         // std::cout << "toCvCopy 8UC3 to BGR8" << std::endl;
-        ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::BGR8);
-    }
+    ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
         
+    // createImagePyramids();
 
     cv::Mat show_img = ptr->image;
     TicToc t_r;
@@ -96,7 +107,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     // 5. 重要！！！trackerData[i].readImage读取图像数据
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
-        ROS_DEBUG("processing camera %d", i);
+        ROS_DEBUG("featureNode: processing camera %d", i);
         if (i != 1 || !STEREO_TRACK)//单目
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
         else//双目
@@ -174,7 +185,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         feature_points->channels.push_back(v_of_point);
         feature_points->channels.push_back(velocity_x_of_point);
         feature_points->channels.push_back(velocity_y_of_point);
-        ROS_DEBUG("publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
+        ROS_DEBUG("featureNode: publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
         // skip the first image; since no optical speed on frist image
         if (!init_pub)
         {
@@ -220,7 +231,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             pub_match.publish(ptr->toImageMsg());
         }
     }
-    ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
+    // ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
 }
 
 int main(int argc, char **argv)
