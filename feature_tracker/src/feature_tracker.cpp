@@ -1,5 +1,9 @@
 #include "feature_tracker.h"
 
+int patch_size = 15;
+int pyramid_levels = 8; 
+int max_iteration = 30;
+int track_precision = 0.01;
 int FeatureTracker::n_id = 0;
 
 bool inBorder(const cv::Point2f &pt)
@@ -83,6 +87,38 @@ void FeatureTracker::addPoints()
     }
 }
 
+
+void FeatureTracker::createImagePyramids(const cv::Mat img){
+
+  img_pyramid_.clear();
+  cv::buildOpticalFlowPyramid(
+      img, img_pyramid_,
+      cv::Size(patch_size, patch_size),
+      pyramid_levels, true, cv::BORDER_REFLECT_101,
+      cv::BORDER_CONSTANT, false);
+
+//   int level = 1;
+//   for (int i = 0; i < pyramid_levels; i++){
+//       cv::imshow(to_string(level), img_pyramid_[i]);
+//       cv::waitKey(-1);
+//       level++;
+//   }
+
+//   LOG(INFO) <<  img_pyramid_.size() << endl;
+//   LOG(INFO) << "buildOpticalFlowPyramid finish" << endl;
+
+#if 0  
+  const Mat& curr_cam1_img = cam1_curr_img_ptr->image;
+  buildOpticalFlowPyramid(
+      curr_cam1_img, curr_cam1_pyramid_,
+      Size(processor_config.patch_size, processor_config.patch_size),
+      processor_config.pyramid_levels, true, BORDER_REFLECT_101,
+      BORDER_CONSTANT, false);
+#endif     
+}
+
+
+
 void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
 {
     cv::Mat img, img0;
@@ -116,20 +152,25 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
     else
         img = img0;
 
+    createImagePyramids(img);
+
     // 2. 判断当前帧图像forw_img是否为空
-    if (forw_img.empty())
+    if (forw_img_pyramid_.empty())
     {
         //如果当前帧的图像数据forw_img为空，说明当前是第一次读入图像数据
         //将读入的图像赋给当前帧forw_img，同时还赋给prev_img、cur_im
         prev_img = cur_img = forw_img = img;
+        prev_img_pyramid_ = cur_img_pyramid_ = forw_img_pyramid_ = img_pyramid_;
     }
     else
     {
         //否则，说明之前就已经有图像读入，只需要更新当前帧forw_img的数据
         forw_img = img;
+        forw_img_pyramid_ = img_pyramid_;
     }
     //此时forw_pts还保存的是上一帧图像中的特征点，所以把它清除
     forw_pts.clear();
+    forw_pts = cur_pts;
 
     if (cur_pts.size() > 0)// 前一帧有特征点
     {
@@ -138,7 +179,40 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         vector<float> err;
         // 3. 调用cv::calcOpticalFlowPyrLK()对前一帧的特征点cur_pts进行LK金字塔光流跟踪，得到forw_pts
         //status标记了从前一帧cur_img到forw_img特征点的跟踪状态，无法被追踪到的点标记为0
-        cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
+
+        cv::calcOpticalFlowPyrLK(
+        cur_img_pyramid_, forw_img_pyramid_, 
+        cur_pts, forw_pts, 
+        status, err, 
+        cv::Size(patch_size, patch_size),
+        pyramid_levels,
+        cv::TermCriteria(cv::TermCriteria::COUNT+cv::TermCriteria::EPS,
+            max_iteration,
+            track_precision),
+        cv::OPTFLOW_USE_INITIAL_FLOW);
+
+        // for (int i = 0; i < cur_pts.size(); i++){
+        //     LOG(INFO) << 
+        // }
+        
+        // try{
+        //     cv::calcOpticalFlowPyrLK(
+        //     cur_img_pyramid_, forw_img_pyramid_, 
+        //     cur_pts, forw_pts, 
+        //     status, cv::noArray(), 
+        //     cv::Size(patch_size, patch_size),
+        //     pyramid_levels,
+        //     cv::TermCriteria(cv::TermCriteria::COUNT+cv::TermCriteria::EPS,
+        //     max_iteration,
+        //     track_precision),
+        //     cv::OPTFLOW_USE_INITIAL_FLOW);
+        //     LOG(INFO) << "calcOpticalFlowPyrLK finish" << endl;
+        // }
+        // catch(exception &e){
+        //     cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
+        // }
+        
+        
 
         for (int i = 0; i < int(forw_pts.size()); i++)
             if (status[i] && !inBorder(forw_pts[i]))// 将当前帧跟踪的位于图像边界外的点标记为0
@@ -219,10 +293,15 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
     // 10. 更新帧、特征点
     //当下一帧图像到来时，当前帧数据就成为了上一帧发布的数据
     prev_img = cur_img;
+    prev_img_pyramid_ = cur_img_pyramid_;
+
     prev_pts = cur_pts;
     prev_un_pts = cur_un_pts;
+
     //把当前帧的数据forw_img、forw_pts赋给上一帧cur_img、cur_pts
     cur_img = forw_img;
+    cur_img_pyramid_ = forw_img_pyramid_;
+
     cur_pts = forw_pts;
     // 11. 根据不同的相机模型去畸变矫正和转换到归一化坐标系上，计算速度
     undistortedPoints();

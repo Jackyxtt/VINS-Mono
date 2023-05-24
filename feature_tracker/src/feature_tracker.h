@@ -32,6 +32,8 @@ class FeatureTracker
 
     void readImage(const cv::Mat &_img,double _cur_time);
 
+    void createImagePyramids(const cv::Mat img);
+
     void setMask();
 
     void addPoints();
@@ -58,6 +60,12 @@ class FeatureTracker
     map<int, cv::Point2f> cur_un_pts_map;
     map<int, cv::Point2f> prev_un_pts_map;
     camodocal::CameraPtr m_camera;
+
+    std::vector<cv::Mat> cur_img_pyramid_;
+    std::vector<cv::Mat> prev_img_pyramid_;
+    std::vector<cv::Mat> forw_img_pyramid_;
+    std::vector<cv::Mat> img_pyramid_;
+
     double cur_time;
     double prev_time;
 

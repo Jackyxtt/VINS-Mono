@@ -26,29 +26,6 @@ bool first_image_flag = true;
 double last_image_time = 0;
 bool init_pub = 0;
 
-
-// createImagePyramids(cv::const){
-//   cv::Mat img;
-//   cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-//   clahe->apply(cam0_curr_img_ptr->image, img);
-    
-//   const Mat& curr_cam0_img = img;//cam0_curr_img_ptr->image;
-//   buildOpticalFlowPyramid(
-//       curr_cam0_img, curr_cam0_pyramid_,
-//       Size(processor_config.patch_size, processor_config.patch_size),
-//       processor_config.pyramid_levels, true, BORDER_REFLECT_101,
-//       BORDER_CONSTANT, false);
-
-// #if 0  
-//   const Mat& curr_cam1_img = cam1_curr_img_ptr->image;
-//   buildOpticalFlowPyramid(
-//       curr_cam1_img, curr_cam1_pyramid_,
-//       Size(processor_config.patch_size, processor_config.patch_size),
-//       processor_config.pyramid_levels, true, BORDER_REFLECT_101,
-//       BORDER_CONSTANT, false);
-// #endif     
-// }
-
 void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
 // void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
@@ -98,9 +75,6 @@ void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
 
         // std::cout << "toCvCopy 8UC3 to BGR8" << std::endl;
     ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-        
-    // createImagePyramids();
-
     cv::Mat show_img = ptr->image;
     TicToc t_r;
 
@@ -222,7 +196,7 @@ void img_callback(const sensor_msgs::CompressedImageConstPtr &img_msg)
                     cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0), 1 , 8, 0);
                     
                     char name[10];
-                    sprintf(name, "%d", trackerData[i].ids[j]);
+                    sprintf(name, "%d", trackerData[i].track_cnt[j]);
                     cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }

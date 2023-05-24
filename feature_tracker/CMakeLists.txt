@@ -35,3 +35,15 @@ add_executable(feature_tracker
     )
 
 target_link_libraries(feature_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(test_pyrLK src/test_pyrLK.cpp)
+target_link_libraries(test_pyrLK ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(test_pyrLK1 src/test_pyrLK1.cpp)
+target_link_libraries(test_pyrLK1 ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(test_buildPyr src/test_buildPyr.cpp)
+target_link_libraries(test_buildPyr ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(test_pyrLKflow src/test_pyrLKflow.cpp)
+target_link_libraries(test_pyrLKflow ${catkin_LIBRARIES} ${OpenCV_LIBS})
