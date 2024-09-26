@@ -149,7 +149,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	q[l].y() = 0;
 	q[l].z() = 0;
 	T[l].setZero();
-	q[frame_num - 1] = q[l] * Quaterniond(relative_R);// 当前帧
+	q[frame_num - 1] = q[l] * Quaterniond(relative_R);// 当前帧  //从第i帧到第l帧 q_l_i
 	T[frame_num - 1] = relative_T;
 	//cout << "init q_l " << q[l].w() << " " << q[l].vec().transpose() << endl;
 	//cout << "init t_l " << T[l].transpose() << endl;
@@ -168,9 +168,9 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	Pose[l].block<3, 3>(0, 0) = c_Rotation[l];
 	Pose[l].block<3, 1>(0, 3) = c_Translation[l];
     // 滑动窗最后一帧，即当前帧
-	c_Quat[frame_num - 1] = q[frame_num - 1].inverse();
-	c_Rotation[frame_num - 1] = c_Quat[frame_num - 1].toRotationMatrix();
-	c_Translation[frame_num - 1] = -1 * (c_Rotation[frame_num - 1] * T[frame_num - 1]);
+	c_Quat[frame_num - 1] = q[frame_num - 1].inverse();//从第l帧到第i帧 q_i_l
+	c_Rotation[frame_num - 1] = c_Quat[frame_num - 1].toRotationMatrix();//从第l帧到第i帧 R_i_l
+	c_Translation[frame_num - 1] = -1 * (c_Rotation[frame_num - 1] * T[frame_num - 1]);//从第l帧到第i帧 t_i_l
 	Pose[frame_num - 1].block<3, 3>(0, 0) = c_Rotation[frame_num - 1];
 	Pose[frame_num - 1].block<3, 1>(0, 3) = c_Translation[frame_num - 1];
 
@@ -259,7 +259,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	for (int i = 0; i < frame_num; i++)
 	{
 		//double array for ceres
-		c_translation[i][0] = c_Translation[i].x();
+		c_translation[i][0] = c_Translation[i].x(); //从第l帧到第i帧 t_i_l
 		c_translation[i][1] = c_Translation[i].y();
 		c_translation[i][2] = c_Translation[i].z();
 		c_rotation[i][0] = c_Quat[i].w();
@@ -284,7 +284,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 			continue;
 		for (int j = 0; j < int(sfm_f[i].observation.size()); j++)
 		{
-			int l = sfm_f[i].observation[j].first;
+			int l = sfm_f[i].observation[j].first;//观测到该点的帧号
 			ceres::CostFunction* cost_function = ReprojectionError3D::Create(
 												sfm_f[i].observation[j].second.x(),
 												sfm_f[i].observation[j].second.y());
@@ -316,7 +316,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 		q[i].x() = c_rotation[i][1]; 
 		q[i].y() = c_rotation[i][2]; 
 		q[i].z() = c_rotation[i][3]; 
-		q[i] = q[i].inverse();
+		q[i] = q[i].inverse(); //q_l_i
 		//cout << "final  q" << " i " << i <<"  " <<q[i].w() << "  " << q[i].vec().transpose() << endl;
 	}
 	for (int i = 0; i < frame_num; i++)

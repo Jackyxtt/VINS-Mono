@@ -520,6 +520,7 @@ bool Estimator::relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l)
               //判断是否满足初始化条件：视差>30和内点数满足要求
             //同时返回窗口最后一帧（当前帧）到第l帧（参考帧）的Rt
             average_parallax = 1.0 * sum_parallax / int(corres.size());
+            // TODO: 460为fx的值
             if(average_parallax * 460 > 30 && m_estimator.solveRelativeRT(corres, relative_R, relative_T))
             {
                 l = i;

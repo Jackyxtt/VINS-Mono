@@ -85,9 +85,24 @@ void FeatureTracker::addPoints()
 
 void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
 {
-    cv::Mat img;
+    cv::Mat img, img0;
+    img0 = _img;
     TicToc t_r;
     cur_time = _cur_time;
+
+    // std::cout << "conversion begins" << std::endl;
+    // ROS_INFO("conversion begins");
+
+    if(img0.channels()==3)
+    {
+        cvtColor(img0,img0,CV_BGR2GRAY);
+    }
+    else if(img0.channels()==4)
+    {
+        cvtColor(img0,img0,CV_BGRA2GRAY);
+    }
+    // ROS_INFO("after conversion img0 is %d", img0.channels());
+    // std::cout << "conversion ends" << std::endl;
 
      // 1.如果EQUALIZE=1，表示太亮或太暗，进行直方图均衡化处理
     if (EQUALIZE)
@@ -95,11 +110,11 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         //自适应直方图均衡
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
         TicToc t_c;
-        clahe->apply(_img, img);
+        clahe->apply(img0, img);
         ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
     }
     else
-        img = _img;
+        img = img0;
 
     // 2. 判断当前帧图像forw_img是否为空
     if (forw_img.empty())
